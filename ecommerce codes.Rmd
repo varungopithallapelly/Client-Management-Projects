@@ -1,0 +1,307 @@
+---
+title: "Project-2"
+date: "23/05/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+#required libraries
+```{r}
+
+#install.packages("tidyverse")
+#install.packages("broom")
+#install.packages("pROC")
+#install.packages("dplyr")
+#install.packages("forestmangr")
+#install.packages("ggplot2")
+#install.packages("ggmosaic")
+#install.packages("ggpubr")
+```
+
+
+#Load the libraries 
+
+```{r}
+library(tidyverse)
+library(forestmangr)
+library(broom)
+library(dplyr)
+library(pROC)
+library(ggplot2)
+library(ggmosaic)
+library(ggpubr)
+```
+
+## 1st question
+
+#Import the dataset ecommerce
+
+```{r}
+browsing <- read.csv("C:\\Users\\vt00196\\OneDrive - University of Surrey\\Desktop\\Marketing Analytics\\project 2\\ecommerce.csv")
+```
+
+# Summary and glimpse
+
+```{r}
+summary(browsing)
+```
+
+
+
+##2nd question
+
+# Before model buidling convert the output and input variables into factors as it is categorical form
+```{r}
+browsing$discount <- as.factor(browsing$discount)
+browsing$source <- as.factor(browsing$source)
+browsing$conversion <- as.factor(browsing$conversion)
+```
+
+
+```{r}
+m1 <- glm(conversion ~ discount, data = browsing, family = "binomial")
+
+summary(m1)
+```
+
+
+
+##3rd question
+```{r}
+exp(coef(m1))
+```
+
+
+## 4th question
+```{r}
+exp(confint(m1))
+```
+
+
+
+## 5th question
+
+```{r}
+ggplot(data = browsing) + 
+  geom_mosaic(aes( 
+    x = product(discount),  
+    fill = conversion), 
+    offset = 0.02,  
+    divider = ddecker()) + 
+  facet_grid(~source,
+             scales = "free") + 
+  theme_pubr() + 
+  theme(axis.text.y = element_blank(), 
+        axis.ticks.y = element_blank(),
+        axis.text.x = element_text(angle = 90)) + 
+  labs(x = "", y = "") 
+```
+
+
+# The conversion through source direct and search is higher when discount is given
+
+## 6th question
+
+# Considering discount and source as variables input to the model 2
+```{r}
+m2 <- glm(conversion ~ discount + source, data = browsing, family = binomial)
+summary(m2)
+```
+# Both the variables are statistically significant and both of them have positive co-efficients 
+
+## 7th question
+
+```{r}
+exp(coef(m2))
+```
+
+
+
+## 8th question
+
+# Model-3 with discount and source and including their interaction
+
+```{r}
+m3 <- glm(conversion~source + discount + discount:source, data = browsing, family = binomial)
+```
+
+```{r}
+summary(m3)
+```
+
+
+## 9th question
+```{r}
+exp(coef(m3))
+exp(confint(m3))
+```
+
+
+## 10th question
+
+# Including all the variables and interaction of discount and source for model-4
+```{r}
+browsing$country <- as.factor(browsing$country)
+```
+
+
+```{r}
+m4 <- glm(conversion ~ discount + source + visit_duration + total_pages_visited + country + discount:source, data = browsing, family = binomial)
+```
+
+
+```{r}
+summary(m4)
+```
+
+## 11th question
+
+```{r}
+cor.test(browsing$total_pages_visited, browsing$visit_duration)
+```
+
+
+## 12th question
+
+# Model-5  
+```{r}
+m5 <- glm(conversion ~ discount + source + total_pages_visited + country + discount:source, data = browsing,  family = binomial)
+```
+```{r}
+summary(m5)
+```
+
+
+
+## 13th question
+
+```{r}
+tidy(m5) %>% # tidy function from broom package
+  mutate(exp_beta_llci = exp(confint(m5))[, 1], # lower ci
+         exp_beta = exp(estimate), # odds ratio, midpoint
+         exp_beta_ulci = exp(confint(m5))[, 2]) %>% # upper 
+  select(term, estimate, exp_beta_llci, exp_beta, exp_beta_ulci) %>% 
+  ggplot(aes(x = term, 
+             y = exp_beta,
+             ymin = exp_beta_llci,
+             ymax = exp_beta_ulci)) +
+  geom_point(size = 4) + 
+  geom_errorbar(width = 0.25) +
+  # add a horizontal line where odds ratio == 1.0 (no effect):
+  geom_hline(yintercept = 1, linetype = "dashed", 
+                    size = 1, color = "dodgerblue") + 
+  labs(title = "95% CI: Pass sign up odds by factor",
+       x = NULL,
+       y = "Likehood by Factor (odds ratio, main effect)") + 
+  coord_flip() + # rotates the plot
+  theme_pubr()
+
+```
+
+
+## 14th question
+
+```{r}
+browsing$base_probability <- predict(
+  m5,
+  browsing,
+  type = "response"
+)
+
+head(browsing)
+```
+
+
+```{r}
+mean(browsing$base_probability)
+```
+
+# The mean value of the base probability is 0.1759163
+
+## 15th question
+
+```{r}
+browsing$pred_conversion <- 1 * (browsing$base_probability >= 0.5)
+
+head(browsing)
+```
+
+
+```{r}
+table(browsing$conversion, browsing$pred_conversion)
+```
+
+# The true positives are 908 and the people getting converted into conversion is 908 and not getting converted is 20,190
+
+## 16th question
+
+```{r}
+#Accuracy
+(20190+908)/(20190+450+908+3498)
+```
+
+## 17th question
+
+```{r}
+rocobj <- roc(browsing$conversion, # actual reference
+              browsing$base_probability) # predictions 
+
+# area under the curve
+rocobj$auc
+
+# plot the ROC curve
+ggroc(rocobj, 
+      color = "dodgerblue", 
+      size = 1,
+      legacy.axes = T) + # the specificity axis (x axis) plotted as increasing “1 - specificity”
+  geom_segment(x = 0, y = 0, xend = 1, yend = 1, linetype = 2, alpha  =  0.01) + # plot the diagonal line
+  theme_pubr() +
+  labs(title = sprintf("ROC Curve (AUC = %.5f)", rocobj$auc), # plot the auc as title
+       x = "1 - Specificity (or fpr)", 
+       y = "Sensitivity (or tpr)")
+```
+
+
+The area under the curve is 77.49%
+
+## 18th question
+
+```{r}
+browsing_new <- browsing
+browsing_new$total_pages_visited <- browsing_new$total_pages_visited+1
+
+browsing_new$new_prob <- predict(m5, browsing_new, type = "response")
+```
+
+
+```{r}
+mean(browsing_new$new_prob)
+mean(browsing_new$base_probability)
+```
+
+
+## 19th question
+
+```{r}
+(mean(browsing_new$new_prob) - mean(browsing_new$base_probability))/mean(browsing_new$base_probability)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

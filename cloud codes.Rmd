@@ -1,0 +1,210 @@
+---
+title: "Marketing Analytics Report"
+subtitle: "Project-3_Office"
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T, comment = NA, message = F, warning = F, fig.align = "center")
+options(pillar.sigfig = 7)
+options(scipen = 999)
+```
+
+```{r}
+library(magrittr ) 
+library(tidyverse)
+library(flexclust)
+```
+<font size="2"> Load the libraries</font>
+
+# Question-1) 
+
+```{r} 
+office<- read.csv("office.csv")
+summary(office)
+glimpse(office)
+```
+
+<font size="2">This databse contains data of the 200 respondents and their choice of preferences when it comes to buy the office is equipment</font>
+
+  
+# Question-2) 
+
+
+```{r}
+
+office_normalized<- scale(office[, c(
+                           "variety_of_choice",
+                           "electronics",
+                           "furniture",
+                           "quality_of_service",
+                           "low_prices",
+                           "return_policy"
+                           )]) %>% 
+  as_tibble() 
+
+```
+
+
+```{r}
+summary(office_normalized)
+```
+<font size="2"> Mean of the normalized attributes is zero always</font>
+<font size="2"> Electronics attribute has the maximum and minimum value </font>
+
+
+# Question-3) 
+
+
+```{r}
+
+distances <- dist(office_normalized, 
+                  method = "euclidean")
+
+as.matrix(distances)[1:5, 1:5] 
+```
+
+
+```{r}
+hier_clust <- hclust(distances, method = "ward.D2") 
+```
+
+<font size="2">plot the dendogram of the hierarchical clustering process</font>
+```{r}
+plot(hier_clust)
+```
+
+
+# Question-4) 
+```{r}
+
+plot(hier_clust)
+rect.hclust(hier_clust, k = 6, border = "skyblue")
+hiercut_obs <- cutree(hier_clust, k = 6)
+table(hiercut_obs)
+
+```
+
+
+# Question-5) 
+
+
+```{r}
+office_normalized %>%
+  mutate(hiercut_obs = factor(hiercut_obs)) %>%
+  group_by(hiercut_obs) %>% 
+  mutate(n=n())%>%
+  summarise_all(~mean(.x)) %>%  
+  mutate(prop=n/sum(n))%>%
+  print(width = Inf) 
+
+options("install.lock"=FALSE)
+
+h_flexclust <- as.kcca(hier_clust, office_normalized, k = 6)
+
+table(hiercut_obs, clusters(h_flexclust))
+```
+
+```{r}
+barchart(h_flexclust, main = "Segment Profiles")
+```
+# Question-6) 
+
+From the table output, 
+
+
+# Question-7) Comment on why you may decide to NOT proceed with this 6-cluster solution.
+
+
+# Question-8) Generate a 5-cluster solution. How many observations are assigned to each cluster?
+
+```{r} 
+hier_clust_5 <- hclust(distances, method = "ward.D2")
+plot(hier_clust_5)
+rect.hclust(hier_clust_5, k = 5, border = "skyblue")
+hier_clust_obs_5 <- cutree(hier_clust_5, k = 5)
+table(hier_clust_obs_5)
+
+```
+
+
+# Question-9) 
+```{r}
+
+```
+
+
+```{r}
+options("install.lock"=FALSE)
+
+office_normalized %>%
+  mutate(hier_clust_obs_5 = hier_clust_obs_5) %>%
+  group_by(hier_clust_obs_5) %>% 
+  mutate(n=n())%>%
+  mutate(prop=n/sum(n))%>%
+  summarise_all(~mean(.x)) %>% 
+  print(width = Inf) 
+
+hier_flex_5 <- as.kcca(hier_clust_5, office_normalized, k = 5)
+table(hier_clust_obs_5, clusters(hier_flex_5))
+
+barchart(hier_flex_5, main = "Segment Profiles")
+
+
+hier_clust_obs_5 <- factor(hier_clust_obs_5,
+              levels = c(1, 2, 3, 4, 5),
+              labels = c("quality_of_service Hierachy", "electronics Hierachy", "furniture Hierachy",
+                         "Professional_service Hierachy",
+                         "Non-Professional_service Hierachy"))
+
+```
+
+
+
+
+
+
+
+# Question-10)
+
+
+----
+
+# Question-12) 
+
+
+```{r}
+
+set.seed(123) 
+
+kmeans <- kmeans(office_normalized, 
+                       centers = 5, 
+                       iter.max = 1000,
+                       nstart = 100)
+
+
+kmeans_labels <- factor(
+  kmeans$cluster,
+  levels = c(1, 2, 3, 4, 5),
+  labels = c("quality_of_service K-means", "electronics K-means", "furniture K-means",
+             "Professional_service K-means",
+             "Non-Professional_service K-means"))
+
+table(kmeans$cluster)
+```
+
+
+# Question-13) 
+
+```{r}
+table(kmeans$cluster, hier_clust_obs_5)
+```
+
+
+```{r}
+hitrate <- (59+60+17+33+29)*100
+hitrate <- hitrate / 200
+hitrate
+```
+
+

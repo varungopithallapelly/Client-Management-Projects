@@ -1,0 +1,319 @@
+---
+title: "Marketing Analytics Report"
+subtitle: "Project 3"
+output:
+  html_document:
+    self-contained : yes
+    fig_caption: yes
+    highlight: pygments
+    theme: flatly
+    toc: yes
+    toc_depth: 2
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = T, comment = NA, message = F, warning = F, fig.align = "center")
+options(pillar.sigfig = 7)
+options(scipen = 999)
+```
+
+## 1st question
+
+Read and inspect the data set. Provide a descriptive analysis for each of the variables in the data set. Make sure you provide an analysis that is meaningful for each variable type (e.g., factors, identifiers).
+
+### Preamble
+
+----
+
+### Libraries
+
+In this session we will use the following r packages. Make sure these packages are installed (by using the `installl.paclages` function) on your device before you begin.
+
+```{r}
+library(tidyverse) # for data wrangling and viz
+library(ggpubr) # for theme_pubr
+library(dfidx) # for indexed data frames
+library(mlogit) # multinomial logit
+library(broom) # for tidy model output
+```
+
+----
+
+### Data
+
+Let's first read the data set onto our R session.
+
+```{r}
+# read in the data
+virtual_storage <- read.csv("cloud.csv",stringsAsFactors=T)
+
+```
+
+Let's inspect the data using the `glimpse` function.
+
+```{r}
+glimpse(virtual_storage)
+```
+
+### Descriptives
+
+```{r}
+summary(virtual_storage)
+```
+
+
+```{r}
+table(virtual_storage$cloud_storage)
+table(virtual_storage$cloud_services)
+table(virtual_storage$price)
+```
+
+
+## 2nd question
+
+Convert the attribute variables cloud_storage and price. Why there is no need to perform this step on the rest of the attribute variables?
+
+```{r}
+virtual_storage$cloud_storage <- relevel(virtual_storage$cloud_storage, ref = '30gb')
+virtual_storage$price <- relevel(virtual_storage$price, ref = 'p6')
+```
+
+## 3rd question 
+
+Create a new variable in the data set that turns price into numeric class. Call this new variable price_n. What is the mean of variable price_n?
+
+```{r}
+virtual_storage['price_n']<- virtual_storage$price
+virtual_storage<- virtual_storage %>% 
+  mutate(price_n = gsub("p", "", price_n), # remove character 'p' from
+         price_n = as.numeric(price_n)) # turn the variable into numeric class
+
+```
+
+
+```{r}
+head(virtual_storage)
+```
+
+```{r}
+#mean of price_n
+mean(virtual_storage$price_n)
+```
+
+## 4th question
+
+ how many times did respondents choose a 30GB cloud storage? 
+ What is the percentage of respondents who chose email only as cloud service?
+
+```{r}
+vs1<- virtual_storage %>% group_by(cloud_storage, choice) %>% summarise(n = n()) %>% ungroup() %>% arrange(desc(n))
+print(vs1)
+```
+
+```{r}
+vs2<- virtual_storage %>% group_by(cloud_services, choice) %>% summarise(n = n()) %>% ungroup() %>% arrange(desc(n))
+print(vs2)
+```
+
+
+```{r}
+vs3<- virtual_storage %>% group_by(cloud_storage, cloud_services, choice) %>% summarise(n = n()) %>% ungroup() %>% arrange(desc(n))
+print(vs3)
+```
+
+
+## 5th question
+
+
+```{r}
+#Shape data for mlogit
+m_data <- dfidx(virtual_storage, # the data set to use
+                choice = "choice", # variable that contains choice
+                idx = list(c("choice_id", "respondent_id"), #the two indexes(choice set & respondent) that define unique obs 
+                           "alternative_id")) # the levels of the alternatives
+# print
+m_data 
+```
+
+## 6th question
+Use m_data to build a multinomial logit model that predicts choice from cloud_storage, customer_support, cloud_services, and price.
+Comment on the coefficient estimates of cloud_storage5000gb and pricep12.
+```{r}
+# for reproducibility
+set.seed(123) 
+
+# estimate the model
+model1 <- mlogit(choice ~ 0 + cloud_storage + customer_support + cloud_services + price, data = m_data)
+
+# print the model output
+summary(model1)$CoefTable 
+```
+ 
+ 
+## 7th question
+ build a multinomial logit model that uses price_n instead of price.
+ Comment on the coefficient estimate of price_n.
+
+```{r}
+# for reproducibility
+set.seed(123) 
+
+# estimate the model
+model2 <- mlogit(choice ~ 0 + cloud_storage + customer_support + cloud_services + price_n, data = m_data)
+
+# print the model output
+summary(model2)$CoefTable 
+```
+ 
+ 
+ 
+## 8th question
+Use a likelihood ratio test to test the model2 against model1.
+ 
+```{r}
+#likelihood-ratio test
+lrtest(model1,model2)
+```
+. 
+
+## 9th question
+Use model2 to predict the choice probabilities for different alternatives in the data. What is the predicted probability of choosing the third alternative in the first choice set?
+```{r}
+head(predict(model2, m_data), 1)
+```
+The 3rd alternative in first set is 0.02837
+
+```{r}
+predicted_propabilities <- predict(model2, m_data) %>% 
+  as_tibble()
+
+# print the predictions
+predicted_propabilities
+```
+
+## 10th question
+
+```{r}
+predicted_alternative <-
+  predicted_propabilities %>% 
+  rowid_to_column("choiseset_id") %>% 
+  pivot_longer(!choiseset_id, names_to = "choice", values_to = "prob") %>% 
+  group_by(choiseset_id) %>% 
+  slice(which.max(prob)) %>% 
+  ungroup() %>% 
+  select(choice) %>% 
+  as_vector()
+
+predicted_alternative
+```
+
+
+## 11th question
+
+```{r}
+selected_alternative <- 
+  virtual_storage %>% 
+  filter(choice > 0) %>% 
+  select(alternative_id) %>% 
+  as_vector()
+
+
+selected_alternative
+```
+
+In the 15th choice set 2nd alternative is the selected alternative.
+
+## 12th question
+
+```{r}
+table(selected_alternative, predicted_alternative)
+```
+```{r}
+# Accuracy or Hit rate 
+(579+624+614)/(579+211+197+190+624+200+185+200+614)
+```
+Accuracy or Hit rate = Diagonal values / All Values = 60.56%
+
+## 13th question
+
+```{r}
+# Custom function 
+predict.share <- function(model, d) {
+  temp <- model.matrix(update(model$formula, 0 ~ .), data = d)[, -1] # generate dummy matrix
+  u <- temp %*% model$coef[colnames(temp)] # calculate utilities
+  probs <- t(exp(u) / sum(exp(u))) # calculate probabilities
+  colnames(probs) <- paste("alternative", colnames(probs))
+  return(probs)
+}
+
+```
+
+## 14th question
+Creating a data object with the following hypothetical market consisting of 5 alternatives.
+```{r}
+d_base <- virtual_storage[
+  c(525, 1043, 3138, 20, 877), # take the 526th, 1044th, 3139rd, 21th & 878th observation from the data set
+  c("cloud_storage", "customer_support", "cloud_services", "price_n") # take attribute columns
+  ]
+
+# print
+d_base
+```
+
+## 15th question
+
+```{r}
+# run the custom function and attach its output
+d_base <- cbind(d_base, as.vector(predict.share(model2, d_base)))
+
+# print
+d_base
+```
+
+## 16th question
+
+```{r}
+# make a copy of the d_base data
+d_new <- d_base
+
+# update d_new data so that the value of row 5 and column "cloud service" is now "email,video"
+d_new[5, "cloud_services"] <- "email, video"
+
+# re-run the custom function and attach its output
+d_new$predicted_share <- as.vector(predict.share(model2, d_new))
+
+# print
+d_new
+
+```
+
+## 17th question
+
+Comparison of market shares after the chance in cloud_services
+
+## 18th question
+```{r}
+# Willingness to pay for customer support 
+- coef(model2)["customer_supportyes"] / coef(model2)["price_n"]
+```
+
+## 19th question
+```{r}
+# Willingness to pay Upgrade from 30gb to 2000gb
+- coef(model2)["cloud_storage2000gb"] / coef(model2)["price_n"]
+```
+
+## 20th question
+
+```{r}
+# Willingness to pay Upgrade from 2000gb to 5000gb
+- (coef(model2)["cloud_storage5000gb"] - coef(model2)["cloud_storage2000gb"]) / coef(model2)["price_n"]
+```
+
+
+
+
+ 
